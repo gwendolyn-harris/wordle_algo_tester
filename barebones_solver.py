@@ -6,7 +6,7 @@ from tqdm import tqdm
 from os import cpu_count
 from functools import partial
 from collections import Counter
-from typing import Callable, Tuple
+from typing import Callable, Tuple, List, Set, Dict
 from multiprocessing import Pool, set_start_method
 
 
@@ -30,14 +30,14 @@ class Word:
         self.absent = set()
         self.word_list = get_word_list(word_length)
 
-    def process_correct(self, correct_list: list[str]):
+    def process_correct(self, correct_list: List[str]):
         '''Where list contains spaces and known letters'''
         self.correct.update(correct_list)
         for i, char in enumerate(correct_list):
             if char != " " and self.word[i] == " ":
                 self.word[i] = char
 
-    def process_present(self, present_dict: dict[str, set[int]]):
+    def process_present(self, present_dict: Dict[str, Set[int]]):
         '''Where present_dict is of the form {char: set(locations it is not)'''
         for char in present_dict.keys():
             if char in self.present:
@@ -80,7 +80,7 @@ class Word:
             new_word_list.append(word)
         self.word_list = new_word_list
 
-    def update_word(self, guess_score: list[list[str, int]]):
+    def update_word(self, guess_score: List[List[str, int]]):
         '''Where guess_score is in the form [[char, score], ...]'''
         correct = []
         present = {}
@@ -103,14 +103,14 @@ class Word:
         self.process_word_list()
 
 
-def get_most_common_letters(word_list: list[str]) -> list[str]:
+def get_most_common_letters(word_list: List[str]) -> List[str]:
     char_counter = Counter("".join(word_list))
     most_common_chars = [ele[0] for ele in char_counter.most_common()]
     most_common_chars.reverse()
     return most_common_chars
 
 
-def guess_basic(word_list: list[str], _word_length: int, _pattern_length: int) -> str:
+def guess_basic(word_list: List[str], _word_length: int, _pattern_length: int) -> str:
     '''Returns a guess containing the the most common letters in the remaining list'''
     most_common_letters = get_most_common_letters(word_list)
     counter = Counter()
@@ -123,12 +123,12 @@ def guess_basic(word_list: list[str], _word_length: int, _pattern_length: int) -
     return counter.most_common(1)[0][0]
 
 
-def get_unique_words(word_list: list[str], word_length: int) -> list[str]:
+def get_unique_words(word_list: List[str], word_length: int) -> List[str]:
     '''Returns a list containing only words with all unique letters'''
     return [word for word in word_list if len(set(word)) == word_length]
 
 
-def guess_unique(word_list: list[str], word_length: int, _pattern_length: int) -> str:
+def guess_unique(word_list: List[str], word_length: int, _pattern_length: int) -> str:
     '''Returns a guess containing the most common characters that are unique in the remaining list'''
     most_common_letters = get_most_common_letters(word_list)
     unique_char_word_list = get_unique_words(word_list, word_length)
@@ -144,7 +144,7 @@ def guess_unique(word_list: list[str], word_length: int, _pattern_length: int) -
     return counter.most_common(1)[0][0]
 
 
-def guess_column(word_list: list[str], word_length: int, _pattern_length: int) -> str:
+def guess_column(word_list: List[str], word_length: int, _pattern_length: int) -> str:
     '''Returns a guess containing the most common characters for each place in the word'''
     column_chars = []
     for i in range(word_length):
@@ -163,7 +163,7 @@ def guess_column(word_list: list[str], word_length: int, _pattern_length: int) -
     return word_counter.most_common(1)[0][0]
 
 
-def guess_column_unique(word_list: list[str], word_length: int, _pattern_length: int) -> str:
+def guess_column_unique(word_list: List[str], word_length: int, _pattern_length: int) -> str:
     '''Returns a guess containing the most common characters for each place in the word with all unique letters'''
     column_chars = []
     for i in range(word_length):
@@ -183,7 +183,7 @@ def guess_column_unique(word_list: list[str], word_length: int, _pattern_length:
     return word_counter.most_common(1)[0][0]
 
 
-def guess_pattern(word_list: list[str], word_length: int, pattern_length: int) -> str:
+def guess_pattern(word_list: List[str], word_length: int, pattern_length: int) -> str:
     '''Returns a guess containing the most common pattern of the given length and the most common letters'''
     pattern_counter = Counter([word[i : i + pattern_length] for word in word_list for i in range(word_length - pattern_length + 1)])
     most_common_letters = get_most_common_letters(word_list)
@@ -198,7 +198,7 @@ def guess_pattern(word_list: list[str], word_length: int, pattern_length: int) -
     return word_counter.most_common(1)[0][0]
 
 
-def guess_pattern_unique(word_list: list[str], word_length: int, pattern_length: int) -> str:
+def guess_pattern_unique(word_list: List[str], word_length: int, pattern_length: int) -> str:
     '''Returns a guess containing the most common pattern of the given length and the most common unique letters'''
     pattern_counter = Counter([word[i : i + pattern_length] for word in word_list for i in range(word_length - pattern_length + 1)])
     most_common_letters = get_most_common_letters(word_list)
@@ -216,14 +216,14 @@ def guess_pattern_unique(word_list: list[str], word_length: int, pattern_length:
     return word_counter.most_common(1)[0][0]
 
 
-def run_basic_trial(answer: str, guess_func: Callable[[list[str], int, int], str], pattern: int = 1) -> Tuple[bool, str, int, dict[int: int]]:
+def run_basic_trial(answer: str, guess_func: Callable[[List[str], int, int], str], pattern: int = 1) -> Tuple[bool, str, int, Dict[int: int]]:
     '''Runs a trial using the given algorithm on the given answer and returns a tuple of data about the run'''
     def check_doubles(answer: str, char: str, known: str) -> bool:
         '''Returns true if char is present elsewhere in the answer than it is already known'''
         short_answer = "".join([lett for i, lett in enumerate(answer) if not (lett == char and known[i] == char)])
         return char in short_answer
 
-    def get_score(answer: str, guess: str, known: str) -> list[list[str, int]]:
+    def get_score(answer: str, guess: str, known: str) -> List[List[str, int]]:
         guess_score = []
         for i, char in enumerate(guess):
             if char == answer[i]:
