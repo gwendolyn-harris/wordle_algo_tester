@@ -6,9 +6,9 @@ from tqdm import tqdm
 from os import cpu_count
 from functools import partial
 from collections import Counter
-from typing import Callable, Tuple, List, Set, Dict
 from multiprocessing import Pool, set_start_method
-
+from typing import Callable, Tuple, List, Set, Dict, Union
+from precomputation import PATTERN_COUNTER2, PATTERN_WORD_LIST2, PATTERN_COUNTER3, PATTERN_WORD_LIST3
 
 def get_word_list(length):
     if length == 5:
@@ -20,6 +20,41 @@ def get_word_list(length):
             words = [word for word in all_words if len(word) == length]
     return words
 
+class WordList:
+    def __init__(self, word_length: int):
+        self.word_list = get_word_list(word_length)
+    
+    def process_word_list(self) -> bool:
+        def is_absent(word_class: Word, word: str) -> bool:
+            for char in word:
+                if char in word_class.absent:
+                    return False
+            return True
+
+        def is_present(word_class: Word, word: str) -> bool:
+            if not word_class.present:
+                return True
+            for char, locations in word_class.present.items():
+                if char in word:
+                    for i in locations:
+                        if word[i] == char:
+                            return False
+                    return True
+                else:
+                    return False
+
+        def is_correct(word_class: Word, word: str) -> bool:
+            for i, char in enumerate(word_class.word):
+                if char != " " and char != word[i]:
+                    return False
+            return True
+
+        new_word_list = []
+        for word in self.word_list:    
+            if not (is_absent(self, word) and is_present(self, word) and is_correct(self, word)):
+                continue
+            new_word_list.append(word)
+        self.word_list = new_word_list
 
 class Word:
     def __init__(self, word_length: int):
@@ -28,7 +63,7 @@ class Word:
         self.correct = set()
         self.present = {}
         self.absent = set()
-        self.word_list = get_word_list(word_length)
+        self.word_list = WordList(self.word_length)
 
     def process_correct(self, correct_list: List[str]):
         '''Where list contains spaces and known letters'''
@@ -48,39 +83,7 @@ class Word:
     def process_absent(self, absent_set: set):
         self.absent.update(absent_set)
 
-    def process_word_list(self) -> bool:
-        def is_absent(word_class, word: str) -> bool:
-            for char in word:
-                if char in word_class.absent:
-                    return False
-            return True
-
-        def is_present(word_class: Word, word: str) -> bool:
-            if not word_class.present:
-                return True
-            for char, locations in word_class.present.items():
-                if char in word:
-                    for i in locations:
-                        if word[i] == char:
-                            return False
-                    return True
-                else:
-                    return False
-
-        def is_correct(word_class, word: str) -> bool:
-            for i, char in enumerate(word_class.word):
-                if char != " " and char != word[i]:
-                    return False
-            return True
-
-        new_word_list = []
-        for word in self.word_list:    
-            if not (is_absent(self, word) and is_present(self, word) and is_correct(self, word)):
-                continue
-            new_word_list.append(word)
-        self.word_list = new_word_list
-
-    def update_word(self, guess_score: List[List[str, int]]):
+    def update_word(self, guess_score: List[List[Union[str, int]]]):
         '''Where guess_score is in the form [[char, score], ...]'''
         correct = []
         present = {}
@@ -223,7 +226,7 @@ def run_basic_trial(answer: str, guess_func: Callable[[List[str], int, int], str
         short_answer = "".join([lett for i, lett in enumerate(answer) if not (lett == char and known[i] == char)])
         return char in short_answer
 
-    def get_score(answer: str, guess: str, known: str) -> List[List[str, int]]:
+    def get_score(answer: str, guess: str, known: str) -> List[List[Union[str, int]]]:
         guess_score = []
         for i, char in enumerate(guess):
             if char == answer[i]:
@@ -254,18 +257,18 @@ if __name__ == '__main__':
     test_params = [(guess_basic, 1), (guess_unique, 1), (guess_column, 1), (guess_column_unique, 1), (guess_pattern, 2), (guess_pattern, 3), (guess_pattern_unique, 2), (guess_pattern_unique, 3)]
     all_stats = {}
 
-    for func, pattern in tqdm(test_params, desc="Tests completed", units="tests"):
+    for func, pattern in tqdm(test_params, desc="Tests completed", unit="tests", position=0):
         stats = {"Success": [], "Guesses": [], "Knowns Gained Per Guess": {1: [], 2: [], 3: [], 4: [], 5: [], 6: []}, "Failures": []}
         word_list = get_word_list(5)
         with Pool(ceil(cpu_count() * 1.1)) as pool:
-            for success, answer, guess_count, knowns_per_guess in tqdm(pool.imap(partial(run_basic_trial, guess_func=func, pattern=pattern), word_list), total=len(word_list), desc=func.__name__, units="words"):
+            for success, answer, guess_count, knowns_per_guess in tqdm(pool.imap(partial(run_basic_trial, guess_func=func, pattern=pattern), word_list), total=len(word_list), desc=func.__name__, unit="words"):
                 stats["Success"].append(success)
                 stats["Guesses"].append(guess_count)
                 if not success:
                     stats["Failures"].append(answer)
                 for guess, knowns_gained in knowns_per_guess.items():
                     stats["Knowns Gained Per Guess"][guess].append(knowns_gained)
-        all_stats[func.__name__ + str(pattern) if pattern != 1 else None] = stats
+        all_stats[func.__name__ + (str(pattern) if pattern != 1 else "")] = stats
 
     with open('Basic_Test_Data.json', 'w') as out:
         json.dump(all_stats, out)

@@ -1,7 +1,19 @@
 #!/usr/bin/env python3
 
+import time
 from collections import Counter
-from typing import Callable, Tuple
+from typing import Callable, Tuple, List
+from precomputation import PATTERN_COUNTER, PATTERN_WORD_LIST
+
+def get_word_list(length):
+    if length == 5:
+        with open("dictionaries/wordle_dictionary.txt") as f:
+            words = [x.strip() for x in f.readlines()]
+    else:
+        with open('dictionaries/words_alpha.txt') as f:
+            all_words = [x.strip() for x in f.readlines()]
+            words = [word for word in all_words if len(word) == length]
+    return words
 
 class Word:
     def __init__(self, word_length: int):
@@ -10,7 +22,7 @@ class Word:
         self.correct = set()
         self.present = {}
         self.absent = set()
-        self.word_list = ["hello", "pouts", "joust", "ground", "bouts", "helps", "aeros", "soare", "cower", "hells", "lilts", "plane", "gross", "twist", "prove"]
+        self.word_list = get_word_list(word_length)
 
     def process_correct(self, correct_list: list[str]):
         '''Where list contains spaces and known letters'''
@@ -63,7 +75,7 @@ class Word:
             new_word_list.append(word)
         self.word_list = new_word_list
 
-    def update_word(self, guess_score: list[list[str, int]]):
+    def update_word(self, guess_score):
         '''Where guess_score is in the form [[char, score], ...]'''
         correct = []
         present = {}
@@ -103,6 +115,37 @@ def guess_basic(word_list: list[str], _word_length: int, _pattern_length: int) -
     print(len(word_list))
     print(counter.most_common(1))
     return counter.most_common(1)[0][0]
+
+def guess_pattern(word_list: List[str], word_length: int, pattern_length: int) -> str:
+    '''Returns a guess containing the most common pattern of the given length and the most common letters'''
+    t0 = time.time()
+    if len(word_list) > 12000:
+        pattern_counter = PATTERN_COUNTER
+    else:
+        pattern_counter = Counter([word[i : i + pattern_length] for word in word_list for i in range(word_length - pattern_length + 1)])
+    print(pattern_counter.most_common(1)[0][0])
+    t1 = time.time()
+    print("Pattern counter:", t1-t0)
+    most_common_letters = get_most_common_letters(word_list)
+    t2 = time.time()
+    print("Most common letters:", t2-t1)
+    if len(word_list) > 12000:
+        pattern_word_list = PATTERN_WORD_LIST
+    else:
+        pattern_word_list = [word for word in word_list if pattern_counter.most_common(1)[0][0] in word]
+    t3 = time.time()
+    print("Reduce the word list to only those with pattern:", t3-t2)
+    word_counter = Counter()
+    t4 = time.time()
+    print("Make Counter:", t4-t3)
+
+    for word in pattern_word_list:
+        for i, letter in enumerate(most_common_letters):
+            if letter in word:
+                word_counter[word] += i
+    print("Pick word:", time.time() - t4)
+
+    return word_counter.most_common(1)[0][0]
 
 def run_basic_trial(answer: str, guess_func: Callable[[list[str], int, int], str], pattern: int = 1) -> Tuple[bool, str, int, dict[int: int]]:
     '''Runs a trial using the given algorithm on the given answer and returns a tuple of data about the run'''
@@ -146,4 +189,5 @@ def get_unique_words(word_list: list[str], word_length: int) -> list[str]:
     return [word for word in word_list if len(set(word)) == word_length]
 
 word = Word(5)
-print(get_unique_words(word.word_list, word.word_length))
+
+run_basic_trial("hello", guess_pattern, 3)
